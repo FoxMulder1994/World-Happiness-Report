@@ -1,0 +1,876 @@
+---
+title: " World Happines Project"
+author: "Oswaldo Salazar"
+date: "March, 28 2019"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+  word_document: default
+  pdf_document: default 
+  odt_document: default
+  md_document: default
+  rtf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(rmarkdown)
+library(graphics)
+out_type <- knitr::opts_knit$get("rmarkdown.pandoc.to")
+display_output <- function(dataset, out_type, filter_opt = 'none') {
+  
+  if (out_type == "html") {
+    out_table <- DT::datatable(dataset, filter = filter_opt)
+  } else {
+    out_table <- knitr::kable(dataset)
+  } 
+  
+  out_table
+}
+```
+
+```{r include=FALSE}
+
+setwd("F:/MS.c_Statistics/Kansas_University/806 Data Visualization/Lesson 8/Homework")
+dir()
+rm(list = ls())
+
+```
+
+_"Happiness is when what you think, what you say, and what you do are in harmony."_
+ _Mahatma Gandhi_ 
+
+   
+
+# World Happiness Report
+
+Two datasets are used on this Homework:
+
+The World Happiness Report is a landmark survey of the state of global happiness. The World Happiness Report 2018, ranks 156 countries by their happiness levels, and 117 countries by the happiness of their immigrants.
+
+http://worldhappiness.report/ed/2018/
+
+The second report is the "Human Development Report" from the United Nations Development Programme. This report is a composite index measuring average achievement in three basic dimensions of human development-a long and healthy life, knowledge and a decent standard of living. 
+
+http://hdr.undp.org/en/data (Go to Data>Table 1: Human Development Index and its components) 
+
+
+The codes below reads onto the two the data sources.
+
+```{r}
+library(ggplot2)
+library(ggfortify)
+library(dplyr)
+library(reshape2)
+library(tools)
+library(plotly)
+library(stringr)
+library(cluster)
+library(FactoMineR)
+library(factoextra)
+library(ggthemes)
+library(NbClust)
+library(readxl)
+library(GGally)
+library(maps)
+library(devtools)
+library(summarytools)
+library(data.table)
+library(rgl)
+library(plot3D)
+library(ggiraph)
+library(RColorBrewer)
+library(tidyr)
+
+```
+
+Reading the data for the two sources:
+
+```{r}
+
+library(readr)
+library("readxl")
+
+```
+
+Reading Human development Index and World Happiness 2018
+
+```{r}
+
+human_development <- read_excel("F:/MS.c_Statistics/Kansas_University/806 Data Visualization/Lesson 8/Homework/2018_Statistical_Annex_Table_1.xlsx")
+X2018<-read_excel("F:/MS.c_Statistics/Kansas_University/806 Data Visualization/Lesson 8/Homework/WHR2018.xls")
+
+```
+
+
+```{r}
+summary(human_development)
+view(dfSummary(human_development))
+```
+Which cols are incorrectly classed? 
+
+```{r}
+sapply(human_development, class) # which cols are incorrectly classed? 
+
+```
+
+Changing from character to 
+
+```{r}
+
+ human_development[, c(3: 9)]<- sapply(human_development[ , c(3:9)], as.numeric) 
+    human_development$Country = as.character(human_development$Country)
+    human_development$`HDI rank..1`=as.numeric(human_development$`HDI rank...1`)
+     
+       
+```
+
+```{r}
+sapply(human_development, class) # which cols are incorrectly classed? 
+
+```
+
+We can see that all variables are character. We need to convert most of them to numeric type with the exception of country, that should be character.
+
+
+
+In the case of X2008...
+
+```{r}
+
+summary(X2018)
+view(dfSummary(X2018))
+```
+
+In the case of X2008, which cols are incorrectly classed? 
+
+```{r}
+sapply(X2018, class) # which cols are incorrectly classed? 
+
+```
+
+The information located in the X2008 data set are in the correct data type
+
+
+First, we are creating a file with all the information, including NA's values. This file will be used later.
+
+
+```{r}
+HDIvsHap_all <- human_development %>%
+  left_join(X2018 , by = c("Country")) %>%
+  mutate(Country = factor(Country)) %>%
+  select(Country, `Human Development Index (HDI)`,`Life expectancy at birth`, # Human development variables
+          `Expected years of schooling`, `Mean years of schooling`, `Gross national income (GNI) per capita`,`GNI per capita rank minus HDI rank`,      
+         
+          #Happines (X2018)
+         `Life Ladder`, `Log GDP per capita` , `Social support`, `Healthy life expectancy at birth`,`Freedom to make life choices`, Generosity,
+          `Perceptions of corruption`,  `Positive affect`, `Negative affect`, `Confidence in national government`, `Democratic Quality`, `Delivery Quality`,
+         `Standard deviation of ladder by country-year`, `Standard deviation/Mean of ladder by country-year`, `GINI index (World Bank estimate)` ) 
+ 
+
+
+```
+
+
+
+
+
+
+## Principal Component Analysis
+
+The presense of many highly intercorrelated explanatory variables may substantially:
+
+i) Increase the sampling variation of the regression coefficients.
+ii) Detract model's descriptive abilities.
+iii) Cause roundoff problems (Kuntner, 2005).
+
+Because of the above reasons, an Principal Component Analysis has been performed on the data.
+
+### Creating a new joined data set
+
+First, joining the data in the new dataset named HDIvsHap.
+
+We observed some NA's so we have to remove NA's
+
+```{r}
+human_development <-na.omit(human_development)
+
+
+```
+
+```{r}
+HDIvsHap <- human_development %>%
+  left_join(X2018 , by = "Country") %>%
+  mutate(Country = factor(Country)) %>%
+  select(Country, `Human Development Index (HDI)`,`Life expectancy at birth`, # Human development variables
+          `Expected years of schooling`, `Mean years of schooling`, `Gross national income (GNI) per capita`,`GNI per capita rank minus HDI rank`,      
+         
+          #Happines (X2018)
+         `Life Ladder`, `Log GDP per capita` , `Social support`, `Healthy life expectancy at birth`,`Freedom to make life choices`, Generosity,
+          `Perceptions of corruption`,  `Positive affect`, `Negative affect`, `Confidence in national government`, `Democratic Quality`, `Delivery Quality`,
+         `Standard deviation of ladder by country-year`, `Standard deviation/Mean of ladder by country-year`, `GINI index (World Bank estimate)` ) 
+ 
+HDIvsHap2<-HDIvsHap 
+
+```
+
+
+We observed some NA's so we have to remove NA's
+
+```{r}
+HDIvsHap <-na.omit(HDIvsHap)
+
+
+```
+
+
+
+## Principal Component Analysis with all data joined
+
+
+Converting all columns to numeric with the excepcion of the first column Country.
+
+```{r}
+
+ sapply(HDIvsHap, class) # which cols are incorrectly classed? 
+ 
+     
+      
+```
+
+
+Now that we already have our dataset, we can take a closer look at it. 
+
+
+```{r}
+HDIvsHap.pca <- PCA(HDIvsHap[, 2:22], graph=FALSE)
+eigenvalues <- HDIvsHap.pca$eig
+fviz_screeplot(HDIvsHap.pca, addlabels = TRUE, ylim = c(0, 65))
+pc <- princomp(HDIvsHap[, 2:22], cor=TRUE, scores=TRUE)
+
+```
+
+
+```{r}
+
+(HDIvsHap.pca$var$contrib)
+
+```
+
+
+ Variables that are correlated with PC1 and PC2 are the most important in explaining the variability in the data set.
+  The contribution of variables was extracted above: The larger the value of the contribution, the more the variable contributes to the component. The variables selected for the model are:
+  
+                                                      Dim.1      Dim.2        Dim.3        Dim.4        Dim.5
+1) Human Development Index (HDI)                     8.58865397  3.5500896  0.143669350 3.192140e-05  0.125451498
+2) Life expectancy at birth                          7.55539539  2.0912030  3.139821431 6.066089e-02  1.963118970
+3) Expected years of schooling                       7.24635749  2.5465918  0.003315004 6.003436e-01  1.386340930
+
+
+
+
+```{r}
+
+fviz_pca_var(HDIvsHap.pca, col.var="contrib",gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = TRUE )
+
+```
+
+variables in explaining the variations retained by the principal components.
+
+## Using Clustering Analysis to group countries 
+
+```{r}
+number <- NbClust(HDIvsHap[, 2:22], distance="euclidean",
+               min.nc=2, max.nc=20, method='kmeans', index='all', alphaBeale = 0.1)
+
+```
+
+```{r}
+
+set.seed(2018)
+pam <- pam(HDIvsHap[, 2:22], diss=FALSE, 3, keep.data=TRUE, do.swap= TRUE)
+fviz_silhouette(pam)
+
+```
+
+
+
+```{r}
+fviz_cluster(pam, stand = FALSE, geom = "point",ellipse.type = "norm")
+
+```
+
+
+A World Map of three clusters
+
+```{r}
+
+HDIvsHap['cluster'] <- as.factor(pam$clustering)
+map <- map_data("world")
+map <- left_join(map, HDIvsHap, by = c('region' = 'Country'))
+
+ggplot() + geom_polygon(data = map, aes(x = long, y = lat, group = group, fill=cluster, color=cluster)) +
+  labs(title = "Clustering Happy Planet Index", subtitle = "Based on data from:http://happyplanetindex.org/", x=NULL, y=NULL) + 
+  theme_minimal()
+
+
+```
+
+Now that we have decided which variables contributes to the model, we will start with the outliers detection procedures. 
+
+Creating the data set with the newly selected variables
+
+```{r}
+
+    HDIvsHap2<-HDIvsHap2[-c(5:22)]
+
+```
+
+
+## Detecting Outliers 
+
+The analysis of outliers has been performed on multivariate an not in univariate data. The reason for that, is because some univariate outliers may be not extreme in multiple regression model, and conversely, some multivariate outliers may not be detectable in single-variables (Kutner, 2005).
+
+Now we have the information in the correct way in order to perform Outliers determination. Let's create different outliers detection functions:
+
+1) Tukey's fences function
+
+```{r}
+
+#Creating and Outlier detection function (tukey's Fences or Boxplots)
+
+tukey_outlier = function(x) {
+  x < quantile(x, 0.25) - 1.5*IQR(x) | x > quantile(x, 0.75) + 1.5 * IQR(x)
+}
+
+
+
+```
+
+Calculating for each variable
+
+```{r}
+tukey_HDI<-tukey_outlier(HDIvsHap2$`Human Development Index (HDI)`)
+tukey_LEB<-tukey_outlier(HDIvsHap2$`Life expectancy at birth`)
+tukey_EYS<-tukey_outlier(HDIvsHap2$`Expected years of schooling`)
+HDIvsHap2<-mutate(HDIvsHap2, tukey_EYS, tukey_HDI, tukey_LEB)
+```
+
+
+
+2) Standard Deviation function
+
+```{r}
+
+sd_outlier = function(x) {
+  abs(scale(x)[,1]) > 3
+}
+
+
+```
+
+Calculating for each variable
+
+```{r}
+
+sd_outlier_HDI<- sd_outlier(HDIvsHap2$`Human Development Index (HDI)`)
+sd_outlier_LEB<- sd_outlier(HDIvsHap2$`Life expectancy at birth`)
+sd_outlier_EYS<- sd_outlier(HDIvsHap2$`Expected years of schooling`)
+
+HDIvsHap2<-mutate(HDIvsHap2, sd_outlier_HDI, sd_outlier_LEB, sd_outlier_EYS)
+
+```
+
+
+3) MAD
+
+```{r}
+
+mad_outlier = function(x) {
+  m = mad(x)
+  med = median(x)
+  x > med + 3 * m | x < med - 3 * m
+}
+
+
+```
+
+Calculating for each variable
+
+```{r}
+
+mad_HDI<-mad_outlier(HDIvsHap2$`Human Development Index (HDI)`)
+mad_LEB<-mad_outlier(HDIvsHap2$`Life expectancy at birth`)
+mad_EYS<-mad_outlier(HDIvsHap2$`Expected years of schooling`)
+
+HDIvsHap2<-mutate(HDIvsHap2, mad_HDI, mad_LEB, mad_EYS)
+```
+
+Creating an outlier function
+
+```{r}
+outlierKD <- function(dt, var) {
+  
+  var_name <- eval(substitute(var),eval(dt))
+  tot <- round(sum(!is.na(var_name)),2)
+  na1 <- round(sum(is.na(var_name)),2)
+  m1 <- round(mean(var_name, na.rm = T),2)
+  par(mfrow=c(2, 2), oma=c(0,0,3,0))
+  boxplot(var_name, main="With outliers", col = "yellow")
+  hist(var_name, main="With outliers", xlab=NA, ylab=NA, col = "red")
+  outlier <- boxplot.stats(var_name)$out
+  mo <- round(mean(outlier),2)
+  var_name <- ifelse(var_name %in% outlier, NA, var_name)
+  boxplot(var_name, main="Without outliers", col = "yellow")
+  hist(var_name, main="Without outliers", xlab=NA, ylab=NA, col = "red")
+  title("Outlier Check", outer=TRUE)
+  na2 <- round(sum(is.na(var_name)),2)
+  message("Outliers identified: ", na2 - na1, " from ", tot, " observations")
+  message("Proportion (%) of outliers: ", round((na2 - na1) / tot*100),2)
+  message("Mean of the outliers: ", mo)
+  m2 <- round(mean(var_name, na.rm = T),2)
+  message("Mean without removing outliers: ", m1)
+  message("Mean if we remove outliers: ", m2)
+ 
+}
+
+  
+
+```
+
+
+1) Outlier Analysis for _Human Development Index (HDI)_
+
+```{r}
+outlierKD(HDIvsHap2,HDIvsHap2$`Human Development Index (HDI)` )
+
+```
+
+Now, we need are going to identify the outliers from above graph. 
+
+```{r}
+which(tukey_HDI)
+
+
+```
+
+Accordign to Tukey's method, the outliers are located at rows 429 430 431 432 433 434 435 436 437 438 439 440.
+
+Checking with other methods...
+
+```{r}
+which(sd_outlier_HDI)
+
+```
+
+According to the sd methos, the only outliers are 439 and 440
+
+```{r}
+which(mad_HDI)
+
+```
+
+For the _Human Development Index (HDI)_ variable, al three methods classify points 439 and 440 as outliers. Both Tukey's and SD identifid points 433 434 435 436 437 438 as outliers. Only Tukey's identified points 429 430 431 432 as outliers. The initial criteria for removing outliers in this project is that at least two methods should have identified the points as outliers. In other words, points 433 434 435 436 437 438 439 and 440 will be removed.
+
+```{r}
+HDIvsHap2<-HDIvsHap2[-c(433,434,435,436,437,438,439),]
+
+```
+
+```{r}
+outlierKD(HDIvsHap2,HDIvsHap2$`Human Development Index (HDI)` )
+
+```
+
+
+2) Outlier Analysis for _Life expectancy at birth (LEB)_
+
+```{r}
+outlierKD(HDIvsHap2,HDIvsHap2$`Life expectancy at birth` )
+
+```
+
+Now, we need are going to identify the outliers from above graph. 
+
+```{r}
+which(tukey_LEB)
+
+
+```
+
+Accordign to Tukey's method, the outliers are located at rows 386 389 398 404 406 420 427 430 432 434 435 436 437 438.
+
+Checking with other methods...
+
+```{r}
+which(sd_outlier_LEB)
+
+```
+
+According to the sd methos, the only outliers are 404 406 420 434 436 438
+
+```{r}
+which(mad_LEB)
+
+```
+
+For the _Life expectancy at birth (LEB)_ variable, al three methods classify points 404 406 420 434 436 438 as outliers. Both MAD and SD identified the same set of points 404 406 420 434 436 438 as outliers. Only Tukey's identified points 386 389 398 as outliers. The initial criteria for removing outliers in this project is that at least two methods  have identified the points as outliers. In other words, points 404 406 420 434 436 438 will be removed.
+
+```{r}
+HDIvsHap2<-HDIvsHap2[-c(404, 406, 420, 434, 436, 438),]
+
+```
+
+
+3) Outlier Analysis for _Expected years of schooling (EYS)_
+
+```{r}
+outlierKD(HDIvsHap2,HDIvsHap2$`Expected years of schooling` )
+
+```
+
+Now, we need are going to identify the outliers from above graph. 
+
+```{r}
+which(tukey_EYS)
+
+
+```
+
+Accordign to Tukey's method, the outliers are located at rows 5 417 422 429 437 438 439 440.
+
+Checking with other methods...
+
+```{r}
+which(sd_outlier_EYS)
+
+```
+
+According to the sd methos, the outliers are 5 429 437 439 440.
+
+```{r}
+which(mad_EYS)
+
+```
+
+For the _Expected years of schooling (EYS)_ variable, al three methods classify points 5 429 437 439 440 as outliers. Both MAD and Tukey's identified the additional point 422 as outliers. Only Tukey's identified point 417 as outliers. The initial criteria for removing outliers in this project is that at least two methods  have identified the points as outliers. In other words, points 5 422 429 437 439 440 will be removed.
+
+```{r}
+HDIvsHap2<-HDIvsHap2[-c(5, 422, 429, 437, 439, 440),]
+
+```
+
+
+Finally, we will take a look of the correlation coefficients
+
+```{r}
+
+ggpairs(HDIvsHap2, columns = 2:4)
+
+```
+
+It looks like _Life expectancy at birth_ still need some improvement. This variable shows a bimodal sampling distribution, suggesting non-normality and that probably important variables has not been included yet.  ALso, _Human Development Index (HDI)_ has an important skweness to the left, also indicating non-normality.This important aspect will be cover in the next step. Finally, _Expected year of schooling_ suggest some degree of normality.
+
+Now, let's take a look of all these variables together.
+
+## Creating a Linear Regression
+
+
+Now, we will try to run simple linear regression on our dataset and create some models
+
+```{r}
+
+fmla <- `Human Development Index (HDI)` ~ `Life expectancy at birth` + `Expected years of schooling`
+
+```
+
+
+Fit the model
+
+```{r}
+
+Happiness_model <- lm(fmla, data = HDIvsHap2)
+
+```
+
+print Happiness_model and call summary()
+
+```{r}
+Happiness_model
+
+```
+
+```{r}
+summary(Happiness_model)
+
+```
+
+
+
+```{r}
+
+plot(Happiness_model)
+
+```
+
+
+The Normal QQ plot reveals that the linear regression has some degree of deviation from normality at the bottom left of the plot. However, an slightly devition from normality may be accepted. In the residuals plots, no megaphone effect, cyclicity, trend or sequence have been obseved. 
+
+Using the prediction option...
+
+```{r}
+
+HDIvsHap2$prediction <- predict(Happiness_model)
+
+```
+
+Visualizing the information
+
+```{r}
+
+ggplot(HDIvsHap2, aes(x = prediction, y = `Human Development Index (HDI)`)) + 
+  geom_point() +
+  geom_abline(color = "blue")
+
+
+```
+
+```{r}
+
+ggplot(HDIvsHap2, aes(x = `Expected years of schooling` + `Life expectancy at birth`, y = `Human Development Index (HDI)`)) + 
+  geom_point() +
+  geom_smooth(method = "lm")
+
+```
+
+# Rankings
+
+In the file X2018, the Happiness Score is called 'Ladder'. During the Gallup World Poll (GWP), the english wording of the of the question is "Please imagine a ladder, with steps numbered from 0 at the bottom to 10 at the top. The top of the ladder represents the best possible life for you and the bottom of the ladder represents the worst possible life for you. This measure is referred as _'life ladder'_ in the X2018 Excel dataset.
+
+Adding the variable Life Ladder (Happiness score) to the file HDIvsHap2...
+
+
+```{r}
+HDIvsHap2 <- HDIvsHap2 %>%
+  left_join(X2018 , by = "Country") %>%
+  mutate(Country = factor(Country)) %>%
+  select(Country, `Human Development Index (HDI)`,`Life expectancy at birth`, `Expected years of schooling`, # Human development variables
+               
+         
+          #Happines variables (X2018)
+         `Life Ladder` ) 
+
+ HDIvsHap2<-HDIvsHap2 
+
+```
+
+Visualizing the information
+
+
+```{r}
+
+  ggplot(HDIvsHap2, aes(x = `Expected years of schooling` + `Life expectancy at birth`, y = `Human Development Index (HDI)`)) + 
+  geom_point(aes(fill= `Life Ladder`), size = 5, pch=21) +
+  geom_smooth(method = "lm")+
+  ggtitle("Association Between Happiness vs. Human Development")+
+  scale_fill_gradient(low="yellow", high="red")
+
+```
+
+
+
+```{r}
+
+sp<-ggplot(HDIvsHap2, aes(x = `Expected years of schooling` + `Life expectancy at birth`, y = `Human Development Index (HDI)`)) + 
+  geom_point(aes(fill= `Life Ladder`), size = HDIvsHap2$`Life Ladder`, pch=21) +
+  geom_smooth(method = "lm")+
+  ggtitle("Association Between Happiness vs. Human Development")
+
+
+```
+
+Adding more channels to the graph...
+
+```{r}
+
+
+sp+scale_fill_gradient(low="yellow", high="red")
+
+```
+
+From the model, we can see that in general terms, High scores of Happiness (Life Ladder) are associated with high values of 'Human Development Index (HDI)'.
+
+Creating an interactive graph
+
+```{r}
+pl = ggplot(HDIvsHap2, aes(x = `Expected years of schooling` + `Life expectancy at birth`, y = `Human Development Index (HDI)`)) + 
+     geom_point_interactive(aes(tooltip = HDIvsHap2$Country,
+                             size= HDIvsHap2$`Life Ladder`,
+                             fill=`Life Ladder`), pch = 21) +
+     geom_smooth(method = "lm")+
+     ggtitle("Association Between Happiness vs. Human Development")+
+     scale_fill_gradient(low="yellow", high="red")
+
+
+```
+
+
+```{r}
+
+ggiraph(code = print(pl), width = 1, height_svg = 4)
+
+```
+
+According to the above interactive map, Countries like Australia, Canada, Austria and Finland are on the top of Happiness and Human Developmnet.  Countries like Egypt, Indonesia, Paraguay and Belize are in the middle of Happiness and Human Development and Niger, Sierre Leone, Chad and Central African Republic in the bottom. Therefore, this correlation apparently correspont with geographic location. Europe and North America on the top, next South America and North Africa and on the bottom Africa.
+
+Let's have a look at the average happiness for each country and region for 2018.
+
+```{r}
+dfavg <- HDIvsHap_all %>%
+  select(Country, `Life Ladder`) %>% #Remember Life Ladder = Happiness Score
+  group_by(Country) %>%
+  summarize(Average = mean(`Life Ladder`)) %>%
+  arrange(desc(Average))
+
+head(dfavg,n=10)
+
+
+```
+
+
+
+```{r}
+dfregions<-HDIvsHap_all[1431:1436,1:6]
+
+kable(dfregions)
+
+```
+
+Incorporating this information in the graph "Association Between Happiness vs. Human Development"
+
+
+
+```{r}
+pl = ggplot(HDIvsHap2, aes(x = `Expected years of schooling` + `Life expectancy at birth`, y = `Human Development Index (HDI)`)) + 
+     geom_point_interactive(aes(tooltip = HDIvsHap2$Country,
+                             size= HDIvsHap2$`Life Ladder`,
+                             fill=`Life Ladder`), pch = 21) +
+     geom_smooth(method = "lm")+
+     annotate("text", x= 90, y=0.40, label="Sub Saharan Africa")+
+     annotate("text", x= 65, y=0.70, label="Latin america")+
+     annotate("text", x= 75, y=0.95, label="Europe and Central Asia")+
+     ggtitle("Association Between Happiness vs. Human Development")+
+     scale_fill_gradient(low="yellow", high="red")
+
+
+```
+
+
+```{r}
+
+ggiraph(code = print(pl), width = 1, height_svg = 4)
+
+```
+
+The above graph is not accurate. However, it shows tendency. It is necessary to depicts all the results on a map.
+
+# Creating a map
+
+```{r}
+
+worldmap <- map_data("world")
+
+happy_world <- HDIvsHap2 
+    worldmap <- full_join(worldmap, HDIvsHap2, by = c('region' = 'Country')) 
+
+map_theme <- theme(
+    axis.title.x = element_blank(),
+    axis.text.x  = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.y  = element_blank(),
+    axis.ticks.y = element_blank(),
+    panel.background = element_rect(fill = "white")) 
+
+
+ggplot() + geom_polygon(data = worldmap, aes(x = long, y = lat, group = group, fill = `Life Ladder`)) +
+  scale_fill_continuous(low="thistle2", high="darkred", na.value="snow2") +
+  coord_quickmap() +
+  labs(title = "Happiness Around the World - 2018", subtitle = "Based on data from:http://happyplanetindex.org/", x=NULL, y=NULL) + 
+  theme_minimal()
+
+
+```
+
+
+The darker the red, the higher the happiness score. Regions in gray do not have happiness data or there is some display problem, like in the cases of USA, Rusia and Venezuela. The happiest regions of the world appear to be in Europe, North and South America,  and New Zealand. Africa appears to contain the lowest overall happiness scores.
+
+The Human Development report, has statistics by Region, while the Happines report (X2018) do not. 
+
+Finally, showing the main factor of Happiness
+
+```{r}
+
+dfwide<-HDIvsHap2 %>%
+  head(850)
+
+dflong <-gather(dfwide, Factor, `Importance of Factor` ,  `Human Development Index (HDI)`:`Expected years of schooling`,  factor_key = TRUE)
+
+ggplot(data = dflong) +
+  geom_bar(stat = "identity", 
+           aes(x = Country, y = `Importance of Factor`, fill = Factor)) +
+  coord_flip() +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  labs(title = "Main Factors of Happiness Top 10 Countries") +
+  theme(plot.title = element_text(size = rel(1.5)),
+        axis.title = element_text(size = rel(1.5)))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
